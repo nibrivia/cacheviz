@@ -1,0 +1,16 @@
+*.rds
+*.swp
+*.swo
+Session.vim
+*.pyc
+__pycache__
+data
+.Rproj.user
+*.csv
+
+plot_flows.py
+pkts.txt
+*.gz
+.Rhistory
+*.tbl
+*.sif

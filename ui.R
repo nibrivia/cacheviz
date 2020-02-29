@@ -7,14 +7,18 @@ time_limits <- sort(unique(experiments$time_limit))
 n_tor <- unique(experiments$n_tor)
 n_switches <- sort(unique(experiments$n_switches))
 loads <- sort(unique(experiments$load))
+flags <- c(`Machine Learning` = "is_ml",
+           Skew            = "skewed",
+           Drain           = "arrive_at_start")
 sw_configs <- experiments %>%
     arrange(n_cache, n_rotor, n_xpand) %>%
     .$net_config %>% unique()
 
 function(request) {
+
     dashboardPage(
         skin = "green",
-        dashboardHeader(title = "Cacheplot"),
+        dashboardHeader(title = "Plotypus"),
         dashboardSidebar(
             bookmarkButton(),
             selectInput("plot_type", "Plot",
@@ -45,21 +49,19 @@ function(request) {
             checkboxGroupInput("workloads", "Workloads",
                                choices = workloads,
                                selected = workloads),
+            checkboxGroupInput("flags", NULL,
+                               choices = flags,
+                               selected = NULL),
             selectizeInput("loads", "Load",
                            choices = loads, multiple = TRUE,
-                           selected = loads),
+                           selected = 1:9/10),
 
-            br(),
-            br(),
-            br(),
-            br(),
-            br(),
             br(),
             menuItem("simulator", icon = icon("github"),
                      href = "https://github.com/nibrivia/rotorsim"),
             menuItem("cachebot", icon = icon("github"),
                      href = "https://github.com/nibrivia/cachebot"),
-            menuItem("cacheviz", icon = icon("github"),
+            menuItem("plotypus", icon = icon("github"),
                      href = "https://github.com/nibrivia/cacheviz")
         ),
         dashboardBody(
@@ -67,22 +69,33 @@ function(request) {
             fluidRow(
                 valueBoxOutput("n_select_box",  width = 4),
                 valueBoxOutput("data_size_box", width = 4),
-                valueBoxOutput("note_box", width = 4)
+                box(div(p("This tool caches its work: start small and grow.")
+                        #,downloadButton("downloadButton", "Plot data (.csv)")
+                        ),
+                    width = 4)
+                #valueBoxOutput("note_box", width = 4)
 
-            ),
-            fluidRow(
-                box(title = "Selected experiments",
-                    collapsible = TRUE,
-                    width = 12,
-                    DT::dataTableOutput("experiments")
-                )
-            ),
+            )
+            ,
             fluidRow(
                 box(title = "Plot",
                     width = 12,
-                    plotOutput("plot", height = 450)
+                    plotOutput("plot", height = "500px")
                 )
             )
-        )
+            ,
+            fluidRow(
+                box(id = "box_experiments",
+                    title = "Selected experiments",
+                    collapsible = TRUE,
+                    width = 12,
+                    DT::dataTableOutput("experiments_table")
+                )
+            )
+        ),
+        tags$head(tags$meta(property = "og:title",
+                            content = "Plotypus"),
+                  tags$meta(property = "og:image",
+                            content = "https://plotypus.csail.mit.edu/plotypus.jpg"))
     )
 }

@@ -12,13 +12,18 @@ cache <- function(id, computation, reload = FALSE) {
     }
 }
 
+fread_cache <- function(input, ...) {
+    input_cache <- paste0(input, ".rds")
+    cache(input_cache, fread(input, ...))
+}
+
 opera_cmp_plot <- function(experiments) {
     fcts <- experiments %>%
         mutate(filename = paste0("~/rotorsim/data/done-", uuid, ".csv")) %>%
         mutate(arrivals = map(filename, function(fn) {
             print(fn)
             res <- cache(paste0(fn, ".fct99_cdf.cache"), {
-                fread(fn, skip = "flow_id") %>%
+                fread_cache(fn, skip = "flow_id") %>%
                     filter(!is.na(fct)) %>%
                     #filter(load == .01) %>%
                     group_by(size) %>%
@@ -31,6 +36,7 @@ opera_cmp_plot <- function(experiments) {
             return(res)
         })) %>%
         unnest(arrivals) %>%
+        ungroup() %>%
         mutate(fct = ifelse(load <= .01, fct, fct99),
                load_name = paste0(100*load, "% load, ", ifelse(load == 0.01, "avg", "99%-ile"))) %>%
         rename(exp_id = uuid)
@@ -60,6 +66,7 @@ opera_cmp_plot <- function(experiments) {
                    y = fct*1e3,
                    color = paste(load_name, net_config),
                    shape = paste(load_name, net_config),
+                   linetype = paste(load_name, net_config),
                    group = exp_id)) +
         geom_line(show.legend = T) +
         #geom_text(aes(label = n), nudge_y=.5, angle = 45) +
@@ -75,7 +82,7 @@ opera_cmp_plot <- function(experiments) {
 
         theme(legend.position = c(.85, .3)) +
         labs(title = "Flow completion times (opera-style)",
-             color = NULL, shape = NULL,
+             color = NULL, shape = NULL, linetype = NULL,
              x = "Flow size (bytes)",
              y = "Flow completion time (μs)",
              caption = "github.com/nibrivia/rotorsim")
@@ -90,9 +97,8 @@ tput_plot <- function(tput_experiments) {
                filename = paste0("~/rotorsim/data/done-", uuid, ".csv")) %>%
         mutate(arrivals = map(filename,
                               function(fn) {
-                                  print(fn)
                                   res <- cache(paste0(fn, ".tput.cache"), {
-                                      fread(fn, skip = "flow_id") %>%
+                                      fread_cache(fn, skip = "flow_id") %>%
                                           group_by(src) %>%
                                           summarize(gbits_sent  = sum(sent/1e9),
                                                     max_t      = max(start, end, na.rm = TRUE),
@@ -111,6 +117,7 @@ tput_plot <- function(tput_experiments) {
         ggplot(aes(x = load,
                    y = mean_sent,
                    color = net_config,
+                   shape = net_config,
                    #color = done,
                    group = net_config)) +
         geom_point() +
@@ -123,13 +130,21 @@ tput_plot <- function(tput_experiments) {
         labs(title = "Average ToR throughput by load",
              x = NULL,
              y = "Mean ToR tput (Gb/s)",
-             color = NULL,
+             color = NULL, shape = NULL,
              caption = "github.com/nibrivia/rotorsim")
 }
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-    output$experiments <- DT::renderDataTable({
+    experiments <- reactive({
+        if (is.null(input$refresh_experiments)) {
+            cache("experiments", {load_experiments()})
+        } else {
+            cache("experiments", {load_experiments()}, input$refresh_experiments == 1)
+        }
+    })
+
+    output$experiments_table <- DT::renderDataTable({
         selected_exps() %>%
             select(n_tor, time_limit, load, cache_rotor_xpand = net_config, workload,
                    drain = arrive_at_start, skewed, is_ml)
@@ -138,7 +153,7 @@ server <- function(input, output, session) {
     rownames = FALSE)
 
     selected_exps <- reactive({
-        ret <- experiments %>%
+        ret <- experiments() %>%
             filter(time_limit == input$time_limit) %>%
             filter(workload %in% input$workloads)
         if (length(input$net_config) != 0)
@@ -150,11 +165,26 @@ server <- function(input, output, session) {
         if (length(input$loads) != 0)
             ret <- ret %>% filter(load %in% input$loads)
 
+        keep_ml    <- "is_ml" %in% input$flags
+        keep_skew  <- "skewed" %in% input$flags
+        keep_drain <- "arrive_at_start" %in% input$flags
+        ret <- ret %>%
+            filter(is_ml == keep_ml,
+                   skewed == keep_skew,
+                   drain == keep_drain)
+
+        ret <- ret %>%
+            group_by(net_config, n_switches, n_tor, load, time_limit, workload) %>%
+                top_n(1, time) %>%
+                ungroup()
+
+
         ret %>% arrange(n_tor, time_limit, net_config, load, workload)
     })
 
     size_gb <- reactive({
         s <- 0
+        invalidateLater(1000)
         input$plot_type
         if (input$plot_type == "fct_opera") {
             cache_suffix <- ".fct99_cdf.cache"
@@ -162,13 +192,14 @@ server <- function(input, output, session) {
         if (input$plot_type == "tput_tor") {
             cache_suffix <- ".tput.cache"
         }
-        print(cache_suffix)
         fns <- paste0("~/rotorsim/data/done-", selected_exps()$uuid, ".csv")
         for (fn in fns) {
+            rds_fn <- paste0(fn, ".rds")
             cache_fn <- paste0(fn, cache_suffix)
-            print(cache_fn)
             if (file.exists(cache_fn)) {
                 s <- s + file.size(cache_fn)
+            } else if(file.exists(rds_fn)) {
+                s <- s + file.size(rds_fn)
             } else {
                 s <- s + file.size(fn)
             }
@@ -178,10 +209,14 @@ server <- function(input, output, session) {
 
     color_size <- reactive({
         color <- "green"
-        if (size_gb() > 10) {
+        if (is.na(size_gb())) {
+            return("aqua")
+        }
+
+        if (size_gb() > 2) {
             color <- "orange"
         }
-        if (size_gb() > 30) {
+        if (size_gb() > 10) {
             color <- "red"
         }
         return(color)
@@ -199,8 +234,10 @@ server <- function(input, output, session) {
     output$n_select_box <- renderValueBox({
         valueBox(
             icon = icon("th-list"),
-            value = paste(nrow(selected_exps()), "sims"),
-            subtitle = paste(nrow(experiments), "total")
+            value = span(nrow(selected_exps()), "sims",
+                          actionButton("refresh_experiments", "refresh")),
+
+            subtitle = span(nrow(experiments()), "total")
         )
     })
 
@@ -213,7 +250,7 @@ server <- function(input, output, session) {
 
         valueBox("Enjoy :)",
                  icon = icon,
-                 subtitle = "plz no crash me...",
+                 subtitle = img(href = "https://plotypus.csail.mit.edu/plotypus.jpg"),
                  width = 4)
     })
 

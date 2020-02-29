@@ -1,5 +1,15 @@
 require(data.table)
 
+#' Cache computation on hard drive
+#'
+#' Returns cache value unless it doesn't exist
+#'
+#' @param id unique identified for this computation
+#' @param computation the computation, unevaluated (put it in \{\})
+#' @param reload force recomputation
+#'
+#' @return Computation, cached, or evaluated. Either way, saves the result to
+#'   the cache
 cache <- function(id, computation, reload = FALSE) {
     if (reload | !file.exists(id)) {
         res <- computation

@@ -1,0 +1,38 @@
+library(tidyverse)
+library(shiny)
+source("helpers.R")
+source("cdfs.R")
+source("plots.R")
+enableBookmarking(store = "url")
+
+load_experiments <- function() {
+    exps <- tibble(filename = list.files(path = "~/rotorsim/data",
+                                         pattern = "headers-.*.csv",
+                                         full.names = TRUE)) %>%
+        mutate(metadata = map(filename, read_csv, n_max = 1, col_types = cols()),
+               nrow     = map(metadata, nrow)) %>%
+        filter(nrow > 0)
+
+    bind_rows(exps$metadata) %>%
+        bind_cols(exps %>% select(filename)) %>%
+        mutate(done  = grepl("done",  filename),
+               drain = grepl("drain", filename),
+               time  = lubridate::as_datetime(timestamp, tz = "America/New_York"),
+               net_config = paste(n_cache, n_rotor, n_xpand),
+               type = ifelse(n_rotor == 0, "xpand",
+                             ifelse(n_rotor == n_cache, "cache", "opera*")))
+}
+
+experiments <- load_experiments()
+
+plot_fns <- tribble(
+    ~name,                 ~key,         ~fn, ~enable,
+    'Opera-style FCTs',    "fct_opera",  opera_cmp_plot, TRUE,
+    'Tput by ToR (drain)', "tput_tor",   tput_plot, TRUE,
+    'WIP - FCT CDF (all flows)', "fct_flow",   NULL, TRUE,
+    'WIP - FCT CDF (by size)',   "fct_size",   NULL, TRUE,
+
+)
+
+plot_choices <- plot_fns$key
+names(plot_choices) <- plot_fns$name

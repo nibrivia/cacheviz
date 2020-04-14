@@ -16,9 +16,8 @@ server <- function(input, output, session) {
         selected_exps() %>%
             select(uuid, n_tor, time_limit, load,
                    cache_rotor_xpand = net_config, workload,
-                   cache_policy,
                    drain = arrive_at_start, skewed, is_ml, valiant,
-                   date = time)
+                   date = time, commit)
     },
     options = list(pageLength = 15, dom = "ftp"),
     rownames = FALSE)
@@ -35,16 +34,19 @@ server <- function(input, output, session) {
             ret <- ret %>% filter(n_tor %in% input$n_tor)
         if (length(input$loads) != 0)
             ret <- ret %>% filter(load %in% input$loads)
+        if (length(input$commits) != 0)
+            ret <- ret %>% filter(commit %in% input$commits)
 
         keep_ml    <- "is_ml" %in% input$flags
         keep_skew  <- "skewed" %in% input$flags
         keep_drain <- "arrive_at_start" %in% input$flags
+        print(keep_drain)
         keep_valiant <- "valiant" %in% input$flags
         ret <- ret %>%
             filter(is_ml == keep_ml,
                    skewed == keep_skew,
                    valiant == keep_valiant | is.na(valiant),
-                   drain == keep_drain)
+                   arrive_at_start == keep_drain)
 
         ret <- ret %>%
             group_by(net_config, cache_policy, n_switches, n_tor, load, time_limit, workload) %>%
@@ -58,9 +60,11 @@ server <- function(input, output, session) {
     size_gb_csv <- reactive({
         s <- 0
         invalidateLater(1000)
-        fns <- paste0("~/rotorsim/data/done-", selected_exps()$uuid, ".csv.rds")
+        fns <- paste0("~/rotorsim/data/done-", selected_exps()$uuid, ".csv")
         for (fn in fns) {
-            if (file.exists(fn)) {
+            if (file.exists(paste0(fn, ".rds"))) {
+                s <- s + file.size(paste0(fn, ".rds"))
+            } else {
                 s <- s + file.size(fn)
             }
         }
@@ -108,8 +112,8 @@ server <- function(input, output, session) {
     })
     output$data_size_box <- renderValueBox({
         valueBox(
-            value    = paste0(round(size_gb(),     1), "GB cache"),
-            subtitle = paste0(round(size_gb_csv(), 1), "GB data"),
+            value    = paste0(round(size_gb(),     3), "GB cache"),
+            subtitle = paste0(round(size_gb_csv(), 3), "GB data"),
             color = color_size(),
             icon = icon("database")
         )

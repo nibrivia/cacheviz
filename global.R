@@ -2,6 +2,7 @@ library(tidyverse)
 library(shiny)
 source("helpers.R")
 source("cdfs.R")
+source("drain.R")
 source("plots.R")
 enableBookmarking(store = "url")
 
@@ -25,12 +26,31 @@ load_experiments <- function() {
 
 experiments <- load_experiments()
 
+function() {
+    count <- experiments %>%
+        filter(time_limit > 100) %>%
+        mutate(sim_n = rank(time))
+    count %>%
+        ggplot(aes(x = time,
+                   y = sim_n)) +
+        geom_hline(aes(yintercept = 300,
+                       color = "# SIGCOMM simulations")) +
+        geom_step() +
+        scale_y_comma() +
+        labs(x = NULL, y = "# simulations",
+             color = NULL,
+             caption = "https://github.com/nibrivia/cachebot") +
+        theme_ipsum_rc() +
+        theme(legend.position = c(.9, .1))
+}
+
 plot_fns <- tribble(
-    ~name,                 ~key,         ~fn, ~enable,
-    'Opera-style FCTs',    "fct_opera",  opera_cmp_plot, TRUE,
-    'Tput by ToR (drain)', "tput_tor",   tput_plot, TRUE,
-    'WIP - FCT CDF (all flows)', "fct_flow",   NULL, TRUE,
-    'WIP - FCT CDF (by size)',   "fct_size",   NULL, TRUE,
+    ~name,                        ~key,         ~fn,           ~enable,
+    'Opera-style FCTs',          "fct_opera",  opera_cmp_plot, TRUE,
+    'Demand Completion (drain)', "dct",        dct_plot,       TRUE,
+    'Tput by ToR (skew)',        "tput_tor",   tput_plot,      TRUE,
+    'FCT CDF (all flows)',       "fct_flow",   cdf_plot,       TRUE,
+    'FCT CDF (by size)',         "fct_size",   cdf_plot_size,  TRUE,
 
 )
 

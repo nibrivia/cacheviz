@@ -15,8 +15,8 @@ fread_cache <- function(input, reload = FALSE, ...) {
     cache(input_cache, fread(input, ...), reload)
 }
 
-gen_labels <- function(experiments) {
-    dimensions <- experiments %>%
+gen_labels <- function(experiments, ignore_cols = c()) {
+    dimensions <- experiments[,!colnames(experiments) %in% ignore_cols] %>%
         select(-time, -timestamp, -host, -filename, -commit,
                -n_switches, -n_rotor, -n_cache, -n_xpand, -type) %>%
         reshape2::melt(id.vars = "uuid", factorAsStrings = TRUE) %>%

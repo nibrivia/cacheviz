@@ -8,6 +8,7 @@ time_limits <- sort(unique(experiments$time_limit))
 n_tor <- sort(unique(experiments$n_tor))
 n_switches <- sort(unique(experiments$n_switches))
 loads <- sort(unique(experiments$load))
+commits <- unique(experiments$commit)
 flags <- c(`Machine Learning` = "is_ml",
            Skew            = "skewed",
            Valiant         = "valiant",
@@ -51,6 +52,9 @@ function(request) {
             selectizeInput("loads", "Load",
                            choices = loads, multiple = TRUE,
                            selected = NULL),
+            selectizeInput("commits", "Commit",
+                           choices = commits, multiple = TRUE,
+                           selected = NULL),
 
             br(),
             menuItem("simulator", icon = icon("github"),
@@ -76,7 +80,7 @@ function(request) {
             fluidRow(
                 box(title = "Plot",
                     width = 12,
-                    plotOutput("plot", height = "500px")
+                    plotOutput("plot", height = "700px")
                 )
             )
             ,
